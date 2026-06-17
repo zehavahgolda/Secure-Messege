@@ -12,7 +12,7 @@ Architecture:
 """
 
 import asyncio
-from typing import List
+from typing import Any
 
 
 class Broadcaster:
@@ -25,24 +25,24 @@ class Broadcaster:
     """
     
     def __init__(self):
-        self.subscribers: List[asyncio.Queue] = []
+        self.subscribers: list[asyncio.Queue[dict[str, Any]]] = []
     
-    async def subscribe(self) -> asyncio.Queue:
+    async def subscribe(self) -> asyncio.Queue[dict[str, Any]]:
         """
         Register a new SSE client.
         Returns a queue that this client will listen to.
         """
-        queue: asyncio.Queue = asyncio.Queue()
+        queue: asyncio.Queue[dict[str, Any]] = asyncio.Queue()
         self.subscribers.append(queue)
         return queue
     
-    async def unsubscribe(self, queue: asyncio.Queue) -> None:
+    async def unsubscribe(self, queue: asyncio.Queue[dict[str, Any]]) -> None:
         """
         Unregister an SSE client (when they disconnect).
         """
         self.subscribers.remove(queue)
     
-    async def publish(self, message: dict) -> None:
+    async def publish(self, message: dict[str, Any]) -> None:
         """
         Broadcast a message to all connected clients.
         

@@ -13,7 +13,7 @@ from server.auth import hash_password
 from server.crypto import encrypt
 
 
-def seed_database():
+def seed_database() -> None:
     """Create test users and messages."""
     
     # Create tables if they don't exist

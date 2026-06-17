@@ -19,13 +19,19 @@ HOW TESTS WORK HERE:
 """
 
 import pytest
+import os
+import asyncio
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
+os.environ.setdefault("JWT_SECRET_KEY", "test-jwt-secret")
+os.environ.setdefault("AES_KEY", "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=")
+
 from server.main import app
 from server.models import Base, get_db
 from server.crypto import encrypt, decrypt
+from server.broadcaster import Broadcaster
 
 
 # ---------------------------------------------------------------------------
@@ -248,3 +254,26 @@ class TestMessaging:
         assert "hi bob" in contents
         assert "hi alice" in contents
         assert "hi bob from charlie" in contents
+
+
+# ===========================================================================
+# 4. SSE broadcaster tests
+# ===========================================================================
+
+class TestSSE:
+
+    def test_broadcaster_pushes_message_to_subscriber_queue(self):
+        async def scenario() -> None:
+            broadcaster = Broadcaster()
+            queue = await broadcaster.subscribe()
+            message = {"event": "message", "content": "hello"}
+
+            await broadcaster.publish(message)
+
+            received = await asyncio.wait_for(queue.get(), timeout=1)
+            assert received == message
+
+            await broadcaster.unsubscribe(queue)
+            assert broadcaster.subscribers == []
+
+        asyncio.run(scenario())

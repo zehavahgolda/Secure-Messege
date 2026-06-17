@@ -41,12 +41,12 @@ BASE_URL = "http://127.0.0.1:8000"
 class MessengerClient:
     """CLI client for Secure Messenger."""
     
-    def __init__(self):
-        self.username = None
-        self.token = None
+    def __init__(self) -> None:
+        self.username: str | None = None
+        self.token: str | None = None
         self.session = requests.Session()
     
-    def register(self):
+    def register(self) -> bool:
         """Register a new user."""
         print("\n=== Register ===")
         username = input("Username: ").strip()
@@ -64,7 +64,7 @@ class MessengerClient:
             print(f"❌ Registration failed: {response.json().get('detail', 'Unknown error')}")
             return False
     
-    def login(self):
+    def login(self) -> bool:
         """Login with username and password."""
         print("\n=== Login ===")
         username = input("Username: ").strip()
@@ -86,7 +86,7 @@ class MessengerClient:
             print(f"❌ Login failed: {response.json().get('detail', 'Unknown error')}")
             return False
     
-    def get_message_history(self):
+    def get_message_history(self) -> None:
         """Fetch and display all messages for this user."""
         response = self.session.get(urljoin(BASE_URL, "/messages"))
         
@@ -103,7 +103,7 @@ class MessengerClient:
         else:
             print(f"❌ Failed to fetch messages")
     
-    def send_message(self, recipient, content):
+    def send_message(self, recipient: str, content: str) -> None:
         """Send a message to a recipient."""
         response = self.session.post(
             urljoin(BASE_URL, "/messages"),
@@ -115,7 +115,7 @@ class MessengerClient:
         else:
             print(f"❌ Failed to send: {response.json().get('detail', 'Unknown error')}")
     
-    def listen_to_stream(self):
+    def listen_to_stream(self) -> None:
         """
         Background thread that listens to SSE stream.
         Prints incoming messages as they arrive.
@@ -146,7 +146,7 @@ class MessengerClient:
         except Exception as e:
             print(f"❌ Stream error: {e}")
     
-    def run(self):
+    def run(self) -> None:
         """Main CLI loop."""
         print("=== Secure Messenger ===")
         

@@ -71,7 +71,13 @@ from .schemas import (
     RegisterRequest, LoginRequest, TokenResponse,
     SendMessageRequest, MessageResponse,
 )
-from .auth import hash_password, verify_password, create_token, require_auth
+from .auth import (
+    DUMMY_PASSWORD_HASH,
+    hash_password,
+    verify_password,
+    create_token,
+    require_auth,
+)
 from .crypto import encrypt, decrypt
 from .broadcaster import broadcaster
 
@@ -84,9 +90,10 @@ router = APIRouter()
 # TODO 1 — Register a new user
 # ---------------------------------------------------------------------------
 @router.post("/register", status_code=status.HTTP_201_CREATED)
-def register(body: RegisterRequest, db: Session = Depends(get_db)):
+def register(body: RegisterRequest, db: Session = Depends(get_db)) -> dict[str, str]:
     existing_user = db.query(User).filter(User.username == body.username).first()
     if existing_user is not None:
+        log.warning("registration rejected duplicate username=%s", body.username)
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="username already taken",
@@ -97,6 +104,7 @@ def register(body: RegisterRequest, db: Session = Depends(get_db)):
     db.add(new_user)
     db.commit()
     db.refresh(new_user)
+    log.info("registered user=%s", new_user.username)
 
     return {"message": "user registered successfully"}
 
@@ -105,9 +113,12 @@ def register(body: RegisterRequest, db: Session = Depends(get_db)):
 # TODO 2 — Login and receive a JWT token
 # ---------------------------------------------------------------------------
 @router.post("/login", response_model=TokenResponse)
-def login(body: LoginRequest, db: Session = Depends(get_db)):
+def login(body: LoginRequest, db: Session = Depends(get_db)) -> dict[str, str]:
     user = db.query(User).filter(User.username == body.username).first()
-    if user is None or not verify_password(body.password, user.password_hash):
+    password_hash = user.password_hash if user is not None else DUMMY_PASSWORD_HASH
+    password_ok = verify_password(body.password, password_hash)
+    if user is None or not password_ok:
+        log.warning("failed login username=%s", body.username)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="invalid username or password",
@@ -115,6 +126,7 @@ def login(body: LoginRequest, db: Session = Depends(get_db)):
         )
 
     access_token = create_token(user.username)
+    log.info("successful login username=%s", user.username)
     return {"access_token": access_token, "token_type": "bearer"}
 
 
@@ -126,7 +138,7 @@ async def send_message(
     body: SendMessageRequest,
     db: Session = Depends(get_db),
     username: str = Depends(require_auth),
-):
+) -> dict[str, object]:
     ciphertext = encrypt(body.content)
     message = Message(
         sender=username,
@@ -136,6 +148,7 @@ async def send_message(
     db.add(message)
     db.commit()
     db.refresh(message)
+    log.info("message sent id=%s sender=%s recipient=%s", message.id, username, body.recipient)
 
     response = {
         "id": message.id,
@@ -158,7 +171,7 @@ async def send_message(
 def get_messages(
     db: Session = Depends(get_db),
     username: str = Depends(require_auth),
-):
+) -> list[dict[str, object]]:
     messages = (
         db.query(Message)
         .filter(

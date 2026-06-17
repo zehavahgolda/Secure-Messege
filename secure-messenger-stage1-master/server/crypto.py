@@ -33,10 +33,10 @@ import os
 import base64
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
+from .config import get_aes_key
 
-# 32 bytes = 256-bit key. os.urandom is cryptographically secure.
-# In production: load this from an environment variable, never hardcode it.
-_KEY: bytes = os.urandom(32)
+# 32 bytes = 256-bit key, loaded from environment so ciphertext survives restarts.
+_KEY: bytes = get_aes_key()
 
 
 def encrypt(plaintext: str) -> str:

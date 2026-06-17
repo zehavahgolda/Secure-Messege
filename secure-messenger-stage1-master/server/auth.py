@@ -74,15 +74,17 @@ from typing import Optional
 
 import bcrypt
 from jose import JWTError, jwt
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Query, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
+from .config import get_jwt_secret
 
-SECRET_KEY = "change-this-to-a-long-random-string-in-production"
+SECRET_KEY = get_jwt_secret()
 ALGORITHM = "HS256"
 TOKEN_EXPIRE_HOURS = 24
+DUMMY_PASSWORD_HASH = "$2b$12$kP7bi3p/eeNs4zX7q9b8Ee31GNZ8nYTV8KJSix0CUD5HIc5UuHcJm"
 
-_bearer = HTTPBearer()
+_bearer = HTTPBearer(auto_error=False)
 
 
 # ---------------------------------------------------------------------------
@@ -139,16 +141,7 @@ def decode_token(token: str) -> Optional[str]:
 # ---------------------------------------------------------------------------
 # TODO 5 — FastAPI dependency: enforce authentication on a route
 # ---------------------------------------------------------------------------
-def require_auth(credentials: HTTPAuthorizationCredentials = Depends(_bearer)) -> str:
-    """
-    Extract the Bearer token from the Authorization header,
-    validate it with decode_token(), and return the username.
-    Raise HTTP 401 if the token is missing, invalid, or expired.
-
-    Usage in a route:
-        def my_route(username: str = Depends(require_auth)):
-    """
-    token = credentials.credentials
+def _validate_token(token: str) -> str:
     username = decode_token(token)
     if username is None:
         raise HTTPException(
@@ -157,3 +150,43 @@ def require_auth(credentials: HTTPAuthorizationCredentials = Depends(_bearer)) -
             headers={"WWW-Authenticate": "Bearer"},
         )
     return username
+
+
+def require_auth(
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(_bearer),
+) -> str:
+    """
+    Extract the Bearer token from the Authorization header,
+    validate it with decode_token(), and return the username.
+    Raise HTTP 401 if the token is missing, invalid, or expired.
+
+    Usage in a route:
+        def my_route(username: str = Depends(require_auth)):
+    """
+    if credentials is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="not authenticated",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    return _validate_token(credentials.credentials)
+
+
+def require_auth_header_or_query(
+    token: Optional[str] = Query(default=None),
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(_bearer),
+) -> str:
+    """
+    Authenticate SSE clients from either Authorization: Bearer or ?token=.
+    Browser EventSource cannot set custom headers, so the query parameter
+    path is supported with the known trade-off that URLs may be logged.
+    """
+    if credentials is not None:
+        return _validate_token(credentials.credentials)
+    if token is not None:
+        return _validate_token(token)
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="not authenticated",
+        headers={"WWW-Authenticate": "Bearer"},
+    )

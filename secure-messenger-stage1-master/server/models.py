@@ -38,9 +38,10 @@ USEFUL REFERENCE:
 """
 
 from datetime import datetime, timezone
+from collections.abc import Generator
 
 from sqlalchemy import create_engine, String, Text, DateTime
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, sessionmaker
+from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, sessionmaker
 
 
 DATABASE_URL = "sqlite:///./messenger.db"
@@ -49,7 +50,7 @@ engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False}, 
 SessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
 
 
-def get_db():
+def get_db() -> Generator[Session, None, None]:
     """
     FastAPI dependency — opens a DB session for one request, closes it after.
     You don't need to change this. Just use it in your routes:
@@ -91,6 +92,6 @@ class Message(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
 
 
-def create_tables():
+def create_tables() -> None:
     """Creates all tables in the database if they don't exist yet."""
     Base.metadata.create_all(bind=engine)

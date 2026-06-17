@@ -21,16 +21,18 @@ HOW TO RUN:
 
 import json
 import logging
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Depends
+from fastapi.middleware.cors import CORSMiddleware
 from sse_starlette.sse import EventSourceResponse
 from sqlalchemy.orm import Session
 
 from .models import create_tables, get_db
 from .routes import router
 from .broadcaster import broadcaster
-from .auth import require_auth
+from .auth import require_auth_header_or_query
 
 
 logging.basicConfig(
@@ -41,9 +43,11 @@ logging.basicConfig(
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    logging.getLogger(__name__).info("starting application")
     create_tables()
     yield
+    logging.getLogger(__name__).info("stopping application")
 
 
 app = FastAPI(
@@ -51,6 +55,14 @@ app = FastAPI(
     description="Authenticated, encrypted REST API for private messaging",
     version="1.0.0",
     lifespan=lifespan,
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 app.include_router(router)
@@ -62,7 +74,7 @@ app.include_router(router)
 @app.get("/stream")
 async def stream(
     db: Session = Depends(get_db),
-    username: str = Depends(require_auth),
+    username: str = Depends(require_auth_header_or_query),
 ) -> EventSourceResponse:
     """
     Server-Sent Events (SSE) endpoint.
@@ -71,9 +83,10 @@ async def stream(
     When any message is published via broadcaster, this endpoint sends it.
     """
     
-    async def event_generator():
+    async def event_generator() -> AsyncIterator[dict[str, str]]:
         # Subscribe to the broadcaster
         queue = await broadcaster.subscribe()
+        logging.getLogger(__name__).info("sse connected user=%s", username)
         try:
             while True:
                 # Wait for a message to be published
@@ -86,5 +99,6 @@ async def stream(
         finally:
             # Clean up when client disconnects
             await broadcaster.unsubscribe(queue)
+            logging.getLogger(__name__).info("sse disconnected user=%s", username)
     
     return EventSourceResponse(event_generator())
